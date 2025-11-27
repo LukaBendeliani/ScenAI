@@ -3,6 +3,8 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSceneContext } from '@/context/SceneContext';
+import { CUBE_FACES, CubeFaceId, CubeImages } from '@/types';
+import { panoramaToCubemap } from '@/utils/panoramaToCubemap';
 
 // Prompt suggestions for AI generation
 const PROMPT_SUGGESTIONS = [
@@ -53,7 +55,22 @@ const EXAMPLE_PANORAMAS = [
   },
 ];
 
-type TabType = 'upload' | 'examples' | 'generate';
+type TabType = 'upload' | 'examples' | 'generate' | 'assemble' | 'cubemap';
+
+interface UploadedAssembleImage {
+  id: string;
+  dataUrl: string;
+  name: string;
+}
+
+interface AssemblyAnalysis {
+  index: number;
+  position: number;
+  description: string;
+}
+
+// Type for partial cube face uploads
+type PartialCubeImages = Partial<CubeImages>;
 
 const backdropVariants = {
   hidden: { opacity: 0 },
@@ -82,6 +99,25 @@ export default function SceneCreator() {
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Assemble tab state
+  const [assembleImages, setAssembleImages] = useState<UploadedAssembleImage[]>([]);
+  const [isAssembling, setIsAssembling] = useState(false);
+  const [assembledImage, setAssembledImage] = useState<string | null>(null);
+  const [assembleError, setAssembleError] = useState<string | null>(null);
+  const [assemblyProgress, setAssemblyProgress] = useState<string>('');
+  const [assemblyAnalysis, setAssemblyAnalysis] = useState<AssemblyAnalysis[] | null>(null);
+  const assembleInputRef = useRef<HTMLInputElement>(null);
+
+  // Cubemap tab state
+  const [cubeFaceImages, setCubeFaceImages] = useState<PartialCubeImages>({});
+  const [activeFaceUpload, setActiveFaceUpload] = useState<CubeFaceId | null>(null);
+  const cubeFaceInputRef = useRef<HTMLInputElement>(null);
+  const [cubemapPanorama, setCubemapPanorama] = useState<string | null>(null);
+  const [isConvertingToCubemap, setIsConvertingToCubemap] = useState(false);
+  const [cubemapConversionProgress, setCubemapConversionProgress] = useState<string>('');
+  const [cubemapError, setCubemapError] = useState<string | null>(null);
+  const cubemapPanoramaInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -93,6 +129,93 @@ export default function SceneCreator() {
       reader.readAsDataURL(file);
     }
   }, []);
+
+  const handleAssembleFilesUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+
+    const newImages: UploadedAssembleImage[] = [];
+    const fileArray = Array.from(files);
+
+    fileArray.forEach((file, index) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        newImages.push({
+          id: `img-${Date.now()}-${index}`,
+          dataUrl: event.target?.result as string,
+          name: file.name,
+        });
+
+        // When all files are loaded, update state
+        if (newImages.length === fileArray.length) {
+          setAssembleImages((prev) => [...prev, ...newImages].slice(0, 12)); // Max 12 images
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Reset the input
+    if (assembleInputRef.current) {
+      assembleInputRef.current.value = '';
+    }
+  }, []);
+
+  const handleRemoveAssembleImage = useCallback((id: string) => {
+    setAssembleImages((prev) => prev.filter((img) => img.id !== id));
+  }, []);
+
+  const handleReorderAssembleImages = useCallback((fromIndex: number, toIndex: number) => {
+    setAssembleImages((prev) => {
+      const newImages = [...prev];
+      const [movedImage] = newImages.splice(fromIndex, 1);
+      newImages.splice(toIndex, 0, movedImage);
+      return newImages;
+    });
+  }, []);
+
+  const handleAssemble = useCallback(async () => {
+    if (assembleImages.length < 2) return;
+
+    setIsAssembling(true);
+    setAssembleError(null);
+    setAssembledImage(null);
+    setAssemblyProgress('Analyzing images...');
+    setAssemblyAnalysis(null);
+
+    try {
+      const response = await fetch('/api/assemble', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          images: assembleImages.map((img) => img.dataUrl),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to assemble panorama');
+      }
+
+      if (data.success && data.imageUrl) {
+        setAssembledImage(data.imageUrl);
+        if (data.analysis) {
+          setAssemblyAnalysis(data.analysis);
+        }
+        setAssemblyProgress('');
+      } else {
+        throw new Error(data.error || 'No panorama generated');
+      }
+    } catch (error: any) {
+      console.error('Assembly error:', error);
+      setAssembleError(error.message || 'Failed to assemble panorama. Please try again.');
+      setAssemblyProgress('');
+    } finally {
+      setIsAssembling(false);
+    }
+  }, [assembleImages]);
 
   const handleGenerate = useCallback(async () => {
     if (!generatePrompt.trim()) return;
@@ -133,9 +256,92 @@ export default function SceneCreator() {
     setGeneratePrompt(suggestion);
   }, []);
 
+  // Cubemap handlers
+  const handleCubeFaceUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && activeFaceUpload) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setCubeFaceImages((prev) => ({
+          ...prev,
+          [activeFaceUpload]: event.target?.result as string,
+        }));
+        setActiveFaceUpload(null);
+      };
+      reader.readAsDataURL(file);
+    }
+    // Reset input
+    if (cubeFaceInputRef.current) {
+      cubeFaceInputRef.current.value = '';
+    }
+  }, [activeFaceUpload]);
+
+  const triggerCubeFaceUpload = useCallback((faceId: CubeFaceId) => {
+    setActiveFaceUpload(faceId);
+    setTimeout(() => {
+      cubeFaceInputRef.current?.click();
+    }, 0);
+  }, []);
+
+  const removeCubeFace = useCallback((faceId: CubeFaceId) => {
+    setCubeFaceImages((prev) => {
+      const newImages = { ...prev };
+      delete newImages[faceId];
+      return newImages;
+    });
+  }, []);
+
+  const handleCubemapPanoramaUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setCubemapPanorama(event.target?.result as string);
+        setCubeFaceImages({}); // Clear any existing face images
+      };
+      reader.readAsDataURL(file);
+    }
+    if (cubemapPanoramaInputRef.current) {
+      cubemapPanoramaInputRef.current.value = '';
+    }
+  }, []);
+
+  const handleConvertPanoramaToCubemap = useCallback(async () => {
+    if (!cubemapPanorama) return;
+
+    setIsConvertingToCubemap(true);
+    setCubemapError(null);
+    setCubemapConversionProgress('Starting conversion...');
+
+    try {
+      const cubeImages = await panoramaToCubemap(cubemapPanorama, {
+        faceSize: 1024,
+        highQuality: true,
+        onProgress: (progress, face) => {
+          setCubemapConversionProgress(`Converting ${face} face... ${Math.round(progress)}%`);
+        },
+      });
+
+      setCubeFaceImages(cubeImages);
+      setCubemapConversionProgress('');
+    } catch (error: any) {
+      console.error('Cubemap conversion error:', error);
+      setCubemapError(error.message || 'Failed to convert panorama to cubemap');
+      setCubemapConversionProgress('');
+    } finally {
+      setIsConvertingToCubemap(false);
+    }
+  }, [cubemapPanorama]);
+
+  // Check if all 6 cube faces are uploaded
+  const allCubeFacesUploaded = CUBE_FACES.every((face) => cubeFaceImages[face.id]);
+  const uploadedFacesCount = Object.keys(cubeFaceImages).length;
+
   const handleCreate = useCallback(() => {
     let imageUrl = '';
     let thumbnail = '';
+    let panoramaType: 'sphere' | 'cube' = 'sphere';
+    let cubeImages: CubeImages | undefined;
 
     if (activeTab === 'examples' && selectedExample) {
       const example = EXAMPLE_PANORAMAS.find((e) => e.id === selectedExample);
@@ -149,6 +355,16 @@ export default function SceneCreator() {
     } else if (activeTab === 'generate' && generatedImage) {
       imageUrl = generatedImage;
       thumbnail = generatedImage;
+    } else if (activeTab === 'assemble' && assembledImage) {
+      imageUrl = assembledImage;
+      thumbnail = assembledImage;
+    } else if (activeTab === 'cubemap' && allCubeFacesUploaded) {
+      // Create cubemap panorama
+      panoramaType = 'cube';
+      cubeImages = cubeFaceImages as CubeImages;
+      // Use front face as thumbnail and imageUrl for display
+      imageUrl = cubeFaceImages.front!;
+      thumbnail = cubeFaceImages.front!;
     }
 
     if (imageUrl && sceneName.trim()) {
@@ -156,6 +372,8 @@ export default function SceneCreator() {
         name: sceneName.trim(),
         imageUrl,
         thumbnail,
+        panoramaType,
+        cubeImages,
       });
       
       // Reset state
@@ -164,15 +382,23 @@ export default function SceneCreator() {
       setUploadedImage(null);
       setGeneratedImage(null);
       setGeneratePrompt('');
+      setAssembleImages([]);
+      setAssembledImage(null);
+      setAssemblyAnalysis(null);
+      setCubeFaceImages({});
+      setCubemapPanorama(null);
+      setCubemapError(null);
       closeCreator();
     }
-  }, [activeTab, selectedExample, uploadedImage, generatedImage, sceneName, addScene, closeCreator]);
+  }, [activeTab, selectedExample, uploadedImage, generatedImage, assembledImage, allCubeFacesUploaded, cubeFaceImages, sceneName, addScene, closeCreator]);
 
   const canCreate = Boolean(
     sceneName.trim() &&
       ((activeTab === 'examples' && selectedExample) ||
         (activeTab === 'upload' && uploadedImage) ||
-        (activeTab === 'generate' && generatedImage))
+        (activeTab === 'generate' && generatedImage) ||
+        (activeTab === 'assemble' && assembledImage) ||
+        (activeTab === 'cubemap' && allCubeFacesUploaded))
   );
 
   if (!isCreatorOpen) return null;
@@ -189,7 +415,7 @@ export default function SceneCreator() {
         onClick={closeCreator}
       >
         <motion.div
-          className="w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl"
+          className="w-full max-w-3xl max-h-[90vh] overflow-hidden rounded-2xl"
           style={{
             backgroundColor: 'var(--bg-secondary)',
             border: '1px solid var(--border-dark)',
@@ -299,11 +525,13 @@ export default function SceneCreator() {
                 { id: 'examples', label: 'Examples', icon: '🖼️' },
                 { id: 'upload', label: 'Upload', icon: '📤' },
                 { id: 'generate', label: 'AI Generate', icon: '✨' },
+                { id: 'assemble', label: 'Assemble', icon: '🧩' },
+                { id: 'cubemap', label: 'Cube Map', icon: '🎲' },
               ].map((tab) => (
                 <motion.button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as TabType)}
-                  className="flex-1 py-2.5 px-4 rounded-md text-sm font-medium flex items-center justify-center gap-2"
+                  className="flex-1 py-2.5 px-3 rounded-md text-xs font-medium flex items-center justify-center gap-1.5"
                   style={{
                     backgroundColor:
                       activeTab === tab.id ? 'var(--bg-tertiary)' : 'transparent',
@@ -692,6 +920,790 @@ export default function SceneCreator() {
                   </p>
                 </motion.div>
               )}
+
+              {activeTab === 'assemble' && (
+                <motion.div
+                  key="assemble"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-4"
+                >
+                  {/* Instructions */}
+                  <div
+                    className="p-3 rounded-lg text-xs"
+                    style={{
+                      backgroundColor: 'var(--bg-tertiary)',
+                      border: '1px solid var(--border-dark)',
+                    }}
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="text-lg">🧩</span>
+                      <div style={{ color: 'var(--text-secondary)' }}>
+                        <p className="font-medium mb-1" style={{ color: 'var(--text-primary)' }}>
+                          Assemble multiple images into a 360° panorama
+                        </p>
+                        <p>
+                          Upload 2-12 images taken around a point. AI will analyze their positions
+                          and stitch them together into a seamless panorama.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Upload Area */}
+                  <input
+                    ref={assembleInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleAssembleFilesUpload}
+                    className="hidden"
+                  />
+
+                  {assembleImages.length === 0 ? (
+                    <motion.button
+                      onClick={() => assembleInputRef.current?.click()}
+                      className="w-full py-10 rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-3"
+                      style={{
+                        borderColor: 'var(--border-dark)',
+                        backgroundColor: 'var(--bg-primary)',
+                      }}
+                      whileHover={{
+                        borderColor: 'var(--neon-blue)',
+                        boxShadow: '0 0 20px rgba(0, 240, 255, 0.1)',
+                      }}
+                    >
+                      <motion.div
+                        className="w-14 h-14 rounded-full flex items-center justify-center"
+                        style={{
+                          backgroundColor: 'var(--bg-tertiary)',
+                        }}
+                        animate={{
+                          scale: [1, 1.05, 1],
+                        }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                      >
+                        <svg
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="var(--neon-blue)"
+                          strokeWidth="2"
+                        >
+                          <rect x="3" y="3" width="7" height="7" rx="1" />
+                          <rect x="14" y="3" width="7" height="7" rx="1" />
+                          <rect x="3" y="14" width="7" height="7" rx="1" />
+                          <rect x="14" y="14" width="7" height="7" rx="1" />
+                        </svg>
+                      </motion.div>
+                      <div className="text-center">
+                        <p
+                          className="text-sm font-medium"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          Click to upload multiple images
+                        </p>
+                        <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+                          Select 2-12 images to assemble
+                        </p>
+                      </div>
+                    </motion.button>
+                  ) : (
+                    <div className="space-y-3">
+                      {/* Image Grid */}
+                      <div className="grid grid-cols-4 gap-2">
+                        {assembleImages.map((image, index) => (
+                          <motion.div
+                            key={image.id}
+                            className="relative group rounded-lg overflow-hidden aspect-square"
+                            style={{
+                              border: '1px solid var(--border-dark)',
+                            }}
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: index * 0.05 }}
+                            layout
+                          >
+                            <img
+                              src={image.dataUrl}
+                              alt={image.name}
+                              className="w-full h-full object-cover"
+                            />
+                            <div
+                              className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                              style={{
+                                background: 'rgba(10, 10, 14, 0.7)',
+                              }}
+                            >
+                              <div className="absolute inset-0 flex items-center justify-center gap-1">
+                                {index > 0 && (
+                                  <motion.button
+                                    onClick={() => handleReorderAssembleImages(index, index - 1)}
+                                    className="p-1 rounded"
+                                    style={{
+                                      backgroundColor: 'var(--bg-tertiary)',
+                                    }}
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
+                                  >
+                                    <svg
+                                      width="12"
+                                      height="12"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="var(--text-primary)"
+                                      strokeWidth="2"
+                                    >
+                                      <path d="M15 18l-6-6 6-6" />
+                                    </svg>
+                                  </motion.button>
+                                )}
+                                <motion.button
+                                  onClick={() => handleRemoveAssembleImage(image.id)}
+                                  className="p-1 rounded"
+                                  style={{
+                                    backgroundColor: 'var(--neon-pink)',
+                                  }}
+                                  whileHover={{ scale: 1.1 }}
+                                  whileTap={{ scale: 0.9 }}
+                                >
+                                  <svg
+                                    width="12"
+                                    height="12"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="white"
+                                    strokeWidth="2"
+                                  >
+                                    <path d="M18 6L6 18M6 6l12 12" />
+                                  </svg>
+                                </motion.button>
+                                {index < assembleImages.length - 1 && (
+                                  <motion.button
+                                    onClick={() => handleReorderAssembleImages(index, index + 1)}
+                                    className="p-1 rounded"
+                                    style={{
+                                      backgroundColor: 'var(--bg-tertiary)',
+                                    }}
+                                    whileHover={{ scale: 1.1 }}
+                                    whileTap={{ scale: 0.9 }}
+                                  >
+                                    <svg
+                                      width="12"
+                                      height="12"
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="var(--text-primary)"
+                                      strokeWidth="2"
+                                    >
+                                      <path d="M9 18l6-6-6-6" />
+                                    </svg>
+                                  </motion.button>
+                                )}
+                              </div>
+                            </div>
+                            <div
+                              className="absolute top-1 left-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold"
+                              style={{
+                                backgroundColor: 'var(--neon-blue)',
+                                color: 'var(--bg-primary)',
+                              }}
+                            >
+                              {index + 1}
+                            </div>
+                          </motion.div>
+                        ))}
+
+                        {/* Add More Button */}
+                        {assembleImages.length < 12 && (
+                          <motion.button
+                            onClick={() => assembleInputRef.current?.click()}
+                            className="aspect-square rounded-lg border-2 border-dashed flex items-center justify-center"
+                            style={{
+                              borderColor: 'var(--border-dark)',
+                              backgroundColor: 'var(--bg-primary)',
+                            }}
+                            whileHover={{
+                              borderColor: 'var(--neon-blue)',
+                            }}
+                          >
+                            <svg
+                              width="20"
+                              height="20"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="var(--text-secondary)"
+                              strokeWidth="2"
+                            >
+                              <line x1="12" y1="5" x2="12" y2="19" />
+                              <line x1="5" y1="12" x2="19" y2="12" />
+                            </svg>
+                          </motion.button>
+                        )}
+                      </div>
+
+                      {/* Image Count */}
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                          {assembleImages.length} image{assembleImages.length !== 1 ? 's' : ''} selected
+                          {assembleImages.length < 2 && ' (minimum 2 required)'}
+                        </p>
+                        <motion.button
+                          onClick={() => {
+                            setAssembleImages([]);
+                            setAssembledImage(null);
+                            setAssemblyAnalysis(null);
+                          }}
+                          className="text-xs px-2 py-1 rounded"
+                          style={{
+                            color: 'var(--neon-pink)',
+                          }}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          Clear all
+                        </motion.button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Assemble Button */}
+                  {assembleImages.length >= 2 && !assembledImage && (
+                    <motion.button
+                      onClick={handleAssemble}
+                      disabled={isAssembling}
+                      className="w-full py-3 rounded-lg font-medium text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                      style={{
+                        background: 'linear-gradient(135deg, var(--neon-blue), var(--neon-pink))',
+                        color: 'var(--bg-primary)',
+                      }}
+                      whileHover={!isAssembling ? { scale: 1.02 } : {}}
+                      whileTap={!isAssembling ? { scale: 0.98 } : {}}
+                    >
+                      {isAssembling ? (
+                        <>
+                          <motion.div
+                            className="w-4 h-4 border-2 rounded-full"
+                            style={{
+                              borderColor: 'transparent',
+                              borderTopColor: 'var(--bg-primary)',
+                            }}
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                          />
+                          {assemblyProgress || 'Assembling panorama...'}
+                        </>
+                      ) : (
+                        <>
+                          <span>🧩</span>
+                          Assemble Panorama with AI
+                        </>
+                      )}
+                    </motion.button>
+                  )}
+
+                  {/* Error Message */}
+                  {assembleError && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-3 rounded-lg text-sm"
+                      style={{
+                        backgroundColor: 'rgba(255, 0, 128, 0.1)',
+                        border: '1px solid var(--neon-pink)',
+                        color: 'var(--neon-pink)',
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" y1="8" x2="12" y2="12" />
+                          <line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                        {assembleError}
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Assembled Image Result */}
+                  {assembledImage && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="space-y-3"
+                    >
+                      <div
+                        className="relative rounded-lg overflow-hidden"
+                        style={{ border: '2px solid var(--neon-blue)' }}
+                      >
+                        <img
+                          src={assembledImage}
+                          alt="Assembled panorama"
+                          className="w-full h-48 object-cover"
+                        />
+                        <motion.div
+                          className="absolute top-2 right-2 px-2 py-1 rounded-md text-xs flex items-center gap-1"
+                          style={{
+                            backgroundColor: 'rgba(0, 240, 255, 0.2)',
+                            border: '1px solid var(--neon-blue)',
+                            color: 'var(--neon-blue)',
+                          }}
+                          animate={{
+                            boxShadow: [
+                              '0 0 5px rgba(0, 240, 255, 0.3)',
+                              '0 0 10px rgba(0, 240, 255, 0.5)',
+                              '0 0 5px rgba(0, 240, 255, 0.3)',
+                            ],
+                          }}
+                          transition={{ duration: 2, repeat: Infinity }}
+                        >
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                          AI Assembled
+                        </motion.div>
+                        <motion.button
+                          onClick={() => {
+                            setAssembledImage(null);
+                            setAssemblyAnalysis(null);
+                            setAssembleError(null);
+                          }}
+                          className="absolute top-2 left-2 p-1.5 rounded-md"
+                          style={{
+                            backgroundColor: 'rgba(255, 0, 128, 0.8)',
+                          }}
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                        >
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="white"
+                            strokeWidth="2"
+                          >
+                            <path d="M18 6L6 18M6 6l12 12" />
+                          </svg>
+                        </motion.button>
+                      </div>
+
+                      {/* Analysis Info */}
+                      {assemblyAnalysis && (
+                        <div
+                          className="p-3 rounded-lg text-xs"
+                          style={{
+                            backgroundColor: 'var(--bg-tertiary)',
+                            border: '1px solid var(--border-dark)',
+                          }}
+                        >
+                          <p className="font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
+                            Image Analysis:
+                          </p>
+                          <div className="space-y-1" style={{ color: 'var(--text-secondary)' }}>
+                            {assemblyAnalysis.map((item, i) => (
+                              <p key={i}>
+                                Image {item.index + 1}: {item.position}° - {item.description}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                        ✓ Panorama assembled successfully! Click &quot;Create Scene&quot; to add it.
+                      </p>
+                    </motion.div>
+                  )}
+
+                  <p className="text-xs text-center" style={{ color: 'var(--text-secondary)' }}>
+                    Powered by Gemini 2.5 Flash • Analysis may take 15-45 seconds
+                  </p>
+                </motion.div>
+              )}
+
+              {activeTab === 'cubemap' && (
+                <motion.div
+                  key="cubemap"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-4"
+                >
+                  {/* Hidden file inputs */}
+                  <input
+                    ref={cubeFaceInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleCubeFaceUpload}
+                    className="hidden"
+                  />
+                  <input
+                    ref={cubemapPanoramaInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleCubemapPanoramaUpload}
+                    className="hidden"
+                  />
+
+                  {/* Instructions */}
+                  <div
+                    className="p-3 rounded-lg text-xs"
+                    style={{
+                      backgroundColor: 'var(--bg-tertiary)',
+                      border: '1px solid var(--border-dark)',
+                    }}
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="text-lg">🎲</span>
+                      <div style={{ color: 'var(--text-secondary)' }}>
+                        <p className="font-medium mb-1" style={{ color: 'var(--text-primary)' }}>
+                          Cube Map Panorama
+                        </p>
+                        <p>
+                          Upload 6 images for each face of a skybox cube, or convert an equirectangular
+                          panorama to cube faces automatically.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Two options: Upload faces or Convert panorama */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Option 1: Convert panorama */}
+                    <div
+                      className="p-3 rounded-lg"
+                      style={{
+                        backgroundColor: 'var(--bg-primary)',
+                        border: '1px solid var(--border-dark)',
+                      }}
+                    >
+                      <p className="text-xs font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
+                        Option 1: Convert Panorama
+                      </p>
+                      {!cubemapPanorama ? (
+                        <motion.button
+                          onClick={() => cubemapPanoramaInputRef.current?.click()}
+                          className="w-full py-6 rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-2"
+                          style={{
+                            borderColor: 'var(--border-dark)',
+                          }}
+                          whileHover={{
+                            borderColor: 'var(--neon-blue)',
+                          }}
+                        >
+                          <svg
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="var(--neon-blue)"
+                            strokeWidth="2"
+                          >
+                            <rect x="3" y="3" width="18" height="18" rx="2" />
+                            <circle cx="8.5" cy="8.5" r="1.5" />
+                            <path d="M21 15l-5-5L5 21" />
+                          </svg>
+                          <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                            Upload panorama
+                          </span>
+                        </motion.button>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="relative rounded-lg overflow-hidden">
+                            <img
+                              src={cubemapPanorama}
+                              alt="Panorama to convert"
+                              className="w-full h-20 object-cover"
+                            />
+                            <motion.button
+                              onClick={() => setCubemapPanorama(null)}
+                              className="absolute top-1 right-1 p-1 rounded"
+                              style={{ backgroundColor: 'var(--neon-pink)' }}
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                            >
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
+                                <path d="M18 6L6 18M6 6l12 12" />
+                              </svg>
+                            </motion.button>
+                          </div>
+                          <motion.button
+                            onClick={handleConvertPanoramaToCubemap}
+                            disabled={isConvertingToCubemap}
+                            className="w-full py-2 rounded-lg text-xs font-medium disabled:opacity-50"
+                            style={{
+                              background: 'linear-gradient(135deg, var(--neon-blue), var(--neon-pink))',
+                              color: 'var(--bg-primary)',
+                            }}
+                            whileHover={!isConvertingToCubemap ? { scale: 1.02 } : {}}
+                            whileTap={!isConvertingToCubemap ? { scale: 0.98 } : {}}
+                          >
+                            {isConvertingToCubemap ? cubemapConversionProgress || 'Converting...' : 'Convert to Cubemap'}
+                          </motion.button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Option 2: Upload individual faces */}
+                    <div
+                      className="p-3 rounded-lg"
+                      style={{
+                        backgroundColor: 'var(--bg-primary)',
+                        border: '1px solid var(--border-dark)',
+                      }}
+                    >
+                      <p className="text-xs font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
+                        Option 2: Upload Faces
+                      </p>
+                      <p className="text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>
+                        Click each face below to upload
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Error Message */}
+                  {cubemapError && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-3 rounded-lg text-sm"
+                      style={{
+                        backgroundColor: 'rgba(255, 0, 128, 0.1)',
+                        border: '1px solid var(--neon-pink)',
+                        color: 'var(--neon-pink)',
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" y1="8" x2="12" y2="12" />
+                          <line x1="12" y1="16" x2="12.01" y2="16" />
+                        </svg>
+                        {cubemapError}
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Cube Face Grid */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {CUBE_FACES.map((face) => {
+                      const hasImage = !!cubeFaceImages[face.id];
+                      return (
+                        <motion.div
+                          key={face.id}
+                          className="relative aspect-square rounded-lg overflow-hidden"
+                          style={{
+                            backgroundColor: 'var(--bg-primary)',
+                            border: hasImage
+                              ? '2px solid var(--neon-blue)'
+                              : '2px dashed var(--border-dark)',
+                          }}
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ delay: CUBE_FACES.indexOf(face) * 0.05 }}
+                        >
+                          {hasImage ? (
+                            <>
+                              <img
+                                src={cubeFaceImages[face.id]}
+                                alt={face.label}
+                                className="w-full h-full object-cover"
+                              />
+                              <motion.button
+                                onClick={() => removeCubeFace(face.id)}
+                                className="absolute top-1 right-1 p-1 rounded"
+                                style={{ backgroundColor: 'rgba(255, 0, 128, 0.8)' }}
+                                whileHover={{ scale: 1.1 }}
+                                whileTap={{ scale: 0.9 }}
+                              >
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
+                                  <path d="M18 6L6 18M6 6l12 12" />
+                                </svg>
+                              </motion.button>
+                              <div
+                                className="absolute bottom-0 left-0 right-0 px-2 py-1 text-center"
+                                style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)' }}
+                              >
+                                <span className="text-xs font-medium" style={{ color: 'var(--neon-blue)' }}>
+                                  {face.icon} {face.label.split(' ')[0]}
+                                </span>
+                              </div>
+                            </>
+                          ) : (
+                            <motion.button
+                              onClick={() => triggerCubeFaceUpload(face.id)}
+                              className="w-full h-full flex flex-col items-center justify-center gap-1"
+                              whileHover={{ backgroundColor: 'rgba(0, 240, 255, 0.05)' }}
+                            >
+                              <span className="text-2xl">{face.icon}</span>
+                              <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                                {face.label.split(' ')[0]}
+                              </span>
+                              <span className="text-xs" style={{ color: 'var(--text-secondary)', opacity: 0.6 }}>
+                                {face.label.split(' ')[1]}
+                              </span>
+                            </motion.button>
+                          )}
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Progress */}
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                      {uploadedFacesCount}/6 faces uploaded
+                    </p>
+                    {uploadedFacesCount > 0 && (
+                      <motion.button
+                        onClick={() => {
+                          setCubeFaceImages({});
+                          setCubemapPanorama(null);
+                        }}
+                        className="text-xs px-2 py-1 rounded"
+                        style={{ color: 'var(--neon-pink)' }}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        Clear all
+                      </motion.button>
+                    )}
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div
+                    className="h-2 rounded-full overflow-hidden"
+                    style={{ backgroundColor: 'var(--bg-tertiary)' }}
+                  >
+                    <motion.div
+                      className="h-full rounded-full"
+                      style={{
+                        background: allCubeFacesUploaded
+                          ? 'linear-gradient(135deg, var(--neon-blue), var(--neon-pink))'
+                          : 'var(--neon-blue)',
+                      }}
+                      initial={{ width: 0 }}
+                      animate={{ width: `${(uploadedFacesCount / 6) * 100}%` }}
+                      transition={{ duration: 0.3 }}
+                    />
+                  </div>
+
+                  {/* Success Message */}
+                  {allCubeFacesUploaded && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-3 rounded-lg text-sm flex items-center gap-2"
+                      style={{
+                        backgroundColor: 'rgba(0, 240, 255, 0.1)',
+                        border: '1px solid var(--neon-blue)',
+                        color: 'var(--neon-blue)',
+                      }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      All 6 faces uploaded! Click &quot;Create Scene&quot; to add the cube panorama.
+                    </motion.div>
+                  )}
+
+                  {/* Cube Layout Diagram */}
+                  <div
+                    className="p-3 rounded-lg"
+                    style={{
+                      backgroundColor: 'var(--bg-primary)',
+                      border: '1px solid var(--border-dark)',
+                    }}
+                  >
+                    <p className="text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>
+                      Cube unfolded layout:
+                    </p>
+                    <div className="flex justify-center">
+                      <div className="grid grid-cols-4 gap-1 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                        <div className="w-8 h-8" />
+                        <div
+                          className="w-8 h-8 flex items-center justify-center rounded"
+                          style={{
+                            backgroundColor: cubeFaceImages.top ? 'var(--neon-blue)' : 'var(--bg-tertiary)',
+                            color: cubeFaceImages.top ? 'var(--bg-primary)' : 'var(--text-secondary)',
+                          }}
+                        >
+                          ↑
+                        </div>
+                        <div className="w-8 h-8" />
+                        <div className="w-8 h-8" />
+
+                        <div
+                          className="w-8 h-8 flex items-center justify-center rounded"
+                          style={{
+                            backgroundColor: cubeFaceImages.left ? 'var(--neon-blue)' : 'var(--bg-tertiary)',
+                            color: cubeFaceImages.left ? 'var(--bg-primary)' : 'var(--text-secondary)',
+                          }}
+                        >
+                          ←
+                        </div>
+                        <div
+                          className="w-8 h-8 flex items-center justify-center rounded"
+                          style={{
+                            backgroundColor: cubeFaceImages.front ? 'var(--neon-blue)' : 'var(--bg-tertiary)',
+                            color: cubeFaceImages.front ? 'var(--bg-primary)' : 'var(--text-secondary)',
+                          }}
+                        >
+                          ◉
+                        </div>
+                        <div
+                          className="w-8 h-8 flex items-center justify-center rounded"
+                          style={{
+                            backgroundColor: cubeFaceImages.right ? 'var(--neon-blue)' : 'var(--bg-tertiary)',
+                            color: cubeFaceImages.right ? 'var(--bg-primary)' : 'var(--text-secondary)',
+                          }}
+                        >
+                          →
+                        </div>
+                        <div
+                          className="w-8 h-8 flex items-center justify-center rounded"
+                          style={{
+                            backgroundColor: cubeFaceImages.back ? 'var(--neon-blue)' : 'var(--bg-tertiary)',
+                            color: cubeFaceImages.back ? 'var(--bg-primary)' : 'var(--text-secondary)',
+                          }}
+                        >
+                          ○
+                        </div>
+
+                        <div className="w-8 h-8" />
+                        <div
+                          className="w-8 h-8 flex items-center justify-center rounded"
+                          style={{
+                            backgroundColor: cubeFaceImages.bottom ? 'var(--neon-blue)' : 'var(--bg-tertiary)',
+                            color: cubeFaceImages.bottom ? 'var(--bg-primary)' : 'var(--text-secondary)',
+                          }}
+                        >
+                          ↓
+                        </div>
+                        <div className="w-8 h-8" />
+                        <div className="w-8 h-8" />
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
             </AnimatePresence>
           </div>
 
@@ -733,4 +1745,3 @@ export default function SceneCreator() {
     </AnimatePresence>
   );
 }
-

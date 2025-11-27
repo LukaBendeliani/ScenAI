@@ -6,6 +6,7 @@ import { OrbitControls, Html, useTexture } from '@react-three/drei';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as THREE from 'three';
 import { useSceneContext } from '@/context/SceneContext';
+import PanoramaCube from './PanoramaCube';
 
 interface HotspotMarkerProps {
   position: [number, number, number];
@@ -444,11 +445,20 @@ export default function SceneViewer() {
             style={{ cursor: isPlacementMode ? 'crosshair' : 'grab' }}
           >
             <CameraController />
-            <PanoramaSphere 
-              imageUrl={currentScene.imageUrl} 
-              isPlacementMode={isPlacementMode}
-              onPlaceHotspot={handlePlaceHotspot}
-            />
+            {/* Render cube or sphere panorama based on panoramaType */}
+            {currentScene.panoramaType === 'cube' && currentScene.cubeImages ? (
+              <PanoramaCube
+                cubeImages={currentScene.cubeImages}
+                isPlacementMode={isPlacementMode}
+                onPlaceHotspot={handlePlaceHotspot}
+              />
+            ) : (
+              <PanoramaSphere 
+                imageUrl={currentScene.imageUrl} 
+                isPlacementMode={isPlacementMode}
+                onPlaceHotspot={handlePlaceHotspot}
+              />
+            )}
             
             {/* Preview hotspot during placement */}
             {pendingHotspotPosition && (

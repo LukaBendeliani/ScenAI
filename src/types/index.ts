@@ -7,6 +7,35 @@ export interface Hotspot {
   label?: string;
 }
 
+// Cube face identifiers
+export type CubeFaceId = 'front' | 'back' | 'left' | 'right' | 'top' | 'bottom';
+
+// Cube face images for cubemap panoramas
+export interface CubeImages {
+  front: string;
+  back: string;
+  left: string;
+  right: string;
+  top: string;
+  bottom: string;
+}
+
+// Cube face metadata
+export interface CubeFace {
+  id: CubeFaceId;
+  label: string;
+  icon: string;
+}
+
+export const CUBE_FACES: CubeFace[] = [
+  { id: 'front', label: 'Front (Z+)', icon: '◉' },
+  { id: 'back', label: 'Back (Z-)', icon: '○' },
+  { id: 'left', label: 'Left (X-)', icon: '←' },
+  { id: 'right', label: 'Right (X+)', icon: '→' },
+  { id: 'top', label: 'Top (Y+)', icon: '↑' },
+  { id: 'bottom', label: 'Bottom (Y-)', icon: '↓' },
+];
+
 export interface Scene {
   id: string;
   name: string;
@@ -14,6 +43,9 @@ export interface Scene {
   thumbnail?: string;
   hotspots: Hotspot[];
   createdAt: number;
+  // New fields for panorama type
+  panoramaType?: 'sphere' | 'cube';
+  cubeImages?: CubeImages;
 }
 
 export interface SceneNodeData extends Record<string, unknown> {
