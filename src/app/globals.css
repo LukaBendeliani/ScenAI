@@ -1,26 +1,206 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Fira+Code:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Cyberpunk Color Palette */
+  --bg-primary: #0A0A0E;
+  --bg-secondary: #151820;
+  --bg-tertiary: #222630;
+  --neon-blue: #00F0FF;
+  --neon-pink: #FF0080;
+  --neon-purple: #A855F7;
+  --text-primary: #E0E0E0;
+  --text-secondary: #A0A0B0;
+  --border-dark: #303540;
+  --hotspot-glow: rgba(0, 240, 255, 0.5);
+  --hotspot-glow-pink: rgba(255, 0, 128, 0.5);
+  
+  /* Gradients */
+  --gradient-neon: linear-gradient(135deg, var(--neon-blue), var(--neon-pink));
+  --gradient-dark: linear-gradient(180deg, var(--bg-secondary), var(--bg-primary));
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg-primary: var(--bg-primary);
+  --color-bg-secondary: var(--bg-secondary);
+  --color-bg-tertiary: var(--bg-tertiary);
+  --color-neon-blue: var(--neon-blue);
+  --color-neon-pink: var(--neon-pink);
+  --color-neon-purple: var(--neon-purple);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-border-dark: var(--border-dark);
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-dark);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--neon-blue);
+}
+
+/* React Flow Customization */
+.react-flow__background {
+  background-color: var(--bg-primary) !important;
+}
+
+.react-flow__minimap {
+  background-color: var(--bg-secondary) !important;
+  border: 1px solid var(--border-dark) !important;
+  border-radius: 8px !important;
+}
+
+.react-flow__controls {
+  background-color: var(--bg-secondary) !important;
+  border: 1px solid var(--border-dark) !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+}
+
+.react-flow__controls-button {
+  background-color: var(--bg-secondary) !important;
+  border-color: var(--border-dark) !important;
+  fill: var(--text-primary) !important;
+}
+
+.react-flow__controls-button:hover {
+  background-color: var(--bg-tertiary) !important;
+}
+
+.react-flow__edge-path {
+  stroke: var(--neon-blue) !important;
+  stroke-width: 2px !important;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--neon-pink) !important;
+}
+
+.react-flow__handle {
+  background-color: var(--neon-blue) !important;
+  border: 2px solid var(--bg-primary) !important;
+  width: 12px !important;
+  height: 12px !important;
+}
+
+.react-flow__handle:hover {
+  background-color: var(--neon-pink) !important;
+  box-shadow: 0 0 10px var(--hotspot-glow-pink);
+}
+
+/* Neon Glow Effects */
+.neon-glow {
+  box-shadow: 
+    0 0 5px var(--neon-blue),
+    0 0 10px var(--hotspot-glow),
+    0 0 20px var(--hotspot-glow);
+}
+
+.neon-glow-pink {
+  box-shadow: 
+    0 0 5px var(--neon-pink),
+    0 0 10px var(--hotspot-glow-pink),
+    0 0 20px var(--hotspot-glow-pink);
+}
+
+/* Breathing Animation */
+@keyframes breathe {
+  0%, 100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 
+      0 0 5px var(--neon-blue),
+      0 0 10px var(--hotspot-glow);
+  }
+  50% {
+    box-shadow: 
+      0 0 10px var(--neon-blue),
+      0 0 20px var(--hotspot-glow),
+      0 0 30px var(--hotspot-glow);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.breathing {
+  animation: breathe 3s ease-in-out infinite;
+}
+
+.pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.floating {
+  animation: float 4s ease-in-out infinite;
+}
+
+/* Grid Pattern Background */
+.grid-pattern {
+  background-image: 
+    linear-gradient(var(--border-dark) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border-dark) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+/* Gradient Text */
+.gradient-text {
+  background: var(--gradient-neon);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Selection */
+::selection {
+  background: var(--neon-blue);
+  color: var(--bg-primary);
 }
