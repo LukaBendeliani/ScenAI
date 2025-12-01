@@ -2,7 +2,9 @@
 
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSession, signOut } from 'next-auth/react';
 import { useSceneContext } from '@/context/SceneContext';
+import { useTourContext } from '@/context/TourContext';
 
 const sidebarVariants = {
   open: {
@@ -40,6 +42,8 @@ const listItemVariants = {
 };
 
 export default function Sidebar() {
+  const { data: session } = useSession();
+  const { setIsTourSelectorOpen } = useTourContext();
   const {
     scenes,
     selectedSceneId,
@@ -336,6 +340,109 @@ export default function Sidebar() {
                   Add New Scene
                 </motion.button>
               </div>
+
+              {/* Switch Tour Button */}
+              <div className="p-3" style={{ borderTop: '1px solid var(--border-dark)' }}>
+                <motion.button
+                  onClick={() => setIsTourSelectorOpen(true)}
+                  className="w-full py-2.5 px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-2"
+                  style={{
+                    backgroundColor: 'var(--bg-tertiary)',
+                    border: '1px solid var(--border-dark)',
+                    color: 'var(--text-primary)',
+                  }}
+                  whileHover={{
+                    borderColor: 'var(--neon-blue)',
+                    boxShadow: '0 0 10px rgba(0, 240, 255, 0.2)',
+                  }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                    <path d="M2 17l10 5 10-5" />
+                    <path d="M2 12l10 5 10-5" />
+                  </svg>
+                  Switch Tour
+                </motion.button>
+              </div>
+
+              {/* User Profile Section */}
+              {session?.user && (
+                <div
+                  className="p-3"
+                  style={{ borderTop: '1px solid var(--border-dark)' }}
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    {session.user.image ? (
+                      <img
+                        src={session.user.image}
+                        alt={session.user.name || 'User'}
+                        className="w-10 h-10 rounded-full"
+                        style={{ border: '2px solid var(--border-dark)' }}
+                      />
+                    ) : (
+                      <div
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold"
+                        style={{
+                          background: 'linear-gradient(135deg, var(--neon-blue), var(--neon-pink))',
+                          color: 'var(--bg-primary)',
+                        }}
+                      >
+                        {session.user.name?.[0]?.toUpperCase() || session.user.email?.[0]?.toUpperCase() || 'U'}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p
+                        className="text-sm font-medium truncate"
+                        style={{ color: 'var(--text-primary)' }}
+                      >
+                        {session.user.name || 'User'}
+                      </p>
+                      <p
+                        className="text-xs truncate"
+                        style={{ color: 'var(--text-secondary)' }}
+                      >
+                        {session.user.email}
+                      </p>
+                    </div>
+                  </div>
+                  <motion.button
+                    onClick={() => signOut({ callbackUrl: '/' })}
+                    className="w-full py-2 px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-2"
+                    style={{
+                      backgroundColor: 'var(--bg-tertiary)',
+                      border: '1px solid var(--border-dark)',
+                      color: 'var(--text-secondary)',
+                    }}
+                    whileHover={{
+                      borderColor: 'var(--neon-pink)',
+                      color: 'var(--neon-pink)',
+                    }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" />
+                      <polyline points="16 17 21 12 16 7" />
+                      <line x1="21" y1="12" x2="9" y2="12" />
+                    </svg>
+                    Sign Out
+                  </motion.button>
+                </div>
+              )}
             </motion.aside>
           </>
         )}

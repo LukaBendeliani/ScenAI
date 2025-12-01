@@ -55,7 +55,7 @@ const EXAMPLE_PANORAMAS = [
   },
 ];
 
-type TabType = 'upload' | 'examples' | 'generate' | 'assemble' | 'cubemap';
+type CreationMode = 'upload' | 'examples' | 'generate' | 'assemble' | 'panorama-to-cubemap' | 'create-cubemap' | null;
 
 interface UploadedAssembleImage {
   id: string;
@@ -90,7 +90,7 @@ const modalVariants = {
 
 export default function SceneCreator() {
   const { isCreatorOpen, closeCreator, addScene } = useSceneContext();
-  const [activeTab, setActiveTab] = useState<TabType>('examples');
+  const [activeMode, setActiveMode] = useState<CreationMode>(null);
   const [sceneName, setSceneName] = useState('');
   const [selectedExample, setSelectedExample] = useState<string | null>(null);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
@@ -343,22 +343,22 @@ export default function SceneCreator() {
     let panoramaType: 'sphere' | 'cube' = 'sphere';
     let cubeImages: CubeImages | undefined;
 
-    if (activeTab === 'examples' && selectedExample) {
+    if (activeMode === 'examples' && selectedExample) {
       const example = EXAMPLE_PANORAMAS.find((e) => e.id === selectedExample);
       if (example) {
         imageUrl = example.imageUrl;
         thumbnail = example.thumbnail;
       }
-    } else if (activeTab === 'upload' && uploadedImage) {
+    } else if (activeMode === 'upload' && uploadedImage) {
       imageUrl = uploadedImage;
       thumbnail = uploadedImage;
-    } else if (activeTab === 'generate' && generatedImage) {
+    } else if (activeMode === 'generate' && generatedImage) {
       imageUrl = generatedImage;
       thumbnail = generatedImage;
-    } else if (activeTab === 'assemble' && assembledImage) {
+    } else if (activeMode === 'assemble' && assembledImage) {
       imageUrl = assembledImage;
       thumbnail = assembledImage;
-    } else if (activeTab === 'cubemap' && allCubeFacesUploaded) {
+    } else if ((activeMode === 'panorama-to-cubemap' || activeMode === 'create-cubemap') && allCubeFacesUploaded) {
       // Create cubemap panorama
       panoramaType = 'cube';
       cubeImages = cubeFaceImages as CubeImages;
@@ -388,17 +388,18 @@ export default function SceneCreator() {
       setCubeFaceImages({});
       setCubemapPanorama(null);
       setCubemapError(null);
+      setActiveMode(null);
       closeCreator();
     }
-  }, [activeTab, selectedExample, uploadedImage, generatedImage, assembledImage, allCubeFacesUploaded, cubeFaceImages, sceneName, addScene, closeCreator]);
+  }, [activeMode, selectedExample, uploadedImage, generatedImage, assembledImage, allCubeFacesUploaded, cubeFaceImages, sceneName, addScene, closeCreator]);
 
   const canCreate = Boolean(
     sceneName.trim() &&
-      ((activeTab === 'examples' && selectedExample) ||
-        (activeTab === 'upload' && uploadedImage) ||
-        (activeTab === 'generate' && generatedImage) ||
-        (activeTab === 'assemble' && assembledImage) ||
-        (activeTab === 'cubemap' && allCubeFacesUploaded))
+      ((activeMode === 'examples' && selectedExample) ||
+        (activeMode === 'upload' && uploadedImage) ||
+        (activeMode === 'generate' && generatedImage) ||
+        (activeMode === 'assemble' && assembledImage) ||
+        ((activeMode === 'panorama-to-cubemap' || activeMode === 'create-cubemap') && allCubeFacesUploaded))
   );
 
   if (!isCreatorOpen) return null;
@@ -516,42 +517,116 @@ export default function SceneCreator() {
               />
             </div>
 
-            {/* Tabs */}
-            <div
-              className="flex gap-1 p-1 rounded-lg mb-6"
-              style={{ backgroundColor: 'var(--bg-primary)' }}
-            >
-              {[
-                { id: 'examples', label: 'Examples', icon: '🖼️' },
-                { id: 'upload', label: 'Upload', icon: '📤' },
-                { id: 'generate', label: 'AI Generate', icon: '✨' },
-                { id: 'assemble', label: 'Assemble', icon: '🧩' },
-                { id: 'cubemap', label: 'Cube Map', icon: '🎲' },
-              ].map((tab) => (
-                <motion.button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as TabType)}
-                  className="flex-1 py-2.5 px-3 rounded-md text-xs font-medium flex items-center justify-center gap-1.5"
-                  style={{
-                    backgroundColor:
-                      activeTab === tab.id ? 'var(--bg-tertiary)' : 'transparent',
-                    color:
-                      activeTab === tab.id
-                        ? 'var(--text-primary)'
-                        : 'var(--text-secondary)',
-                  }}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <span>{tab.icon}</span>
-                  {tab.label}
-                </motion.button>
-              ))}
-            </div>
-
-            {/* Tab Content */}
+            {/* Mode Selection Buttons */}
             <AnimatePresence mode="wait">
-              {activeTab === 'examples' && (
+              {activeMode === null && (
+                <motion.div
+                  key="mode-selection"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="grid grid-cols-2 gap-3"
+                >
+                  {[
+                    { id: 'examples', label: 'Examples', icon: '🖼️', description: 'Choose from sample panoramas' },
+                    { id: 'upload', label: 'Upload Panorama', icon: '📤', description: 'Upload your own 360° image' },
+                    { id: 'generate', label: 'AI Generate', icon: '✨', description: 'Generate with Gemini AI' },
+                    { id: 'assemble', label: 'Assemble', icon: '🧩', description: 'Stitch multiple images together' },
+                    { id: 'panorama-to-cubemap', label: 'Panorama to Cubemap', icon: '🔄', description: 'Convert panorama to cube faces' },
+                    { id: 'create-cubemap', label: 'Create Cubemap', icon: '🎲', description: 'Upload 6 cube face images' },
+                  ].map((mode) => (
+                    <motion.button
+                      key={mode.id}
+                      onClick={() => setActiveMode(mode.id as CreationMode)}
+                      className="p-4 rounded-xl text-left group"
+                      style={{
+                        backgroundColor: 'var(--bg-primary)',
+                        border: '1px solid var(--border-dark)',
+                      }}
+                      whileHover={{
+                        borderColor: 'var(--neon-blue)',
+                        boxShadow: '0 0 20px rgba(0, 240, 255, 0.15)',
+                      }}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <div className="flex items-start gap-3">
+                        <motion.div
+                          className="w-10 h-10 rounded-lg flex items-center justify-center text-xl"
+                          style={{
+                            backgroundColor: 'var(--bg-tertiary)',
+                          }}
+                          whileHover={{
+                            background: 'linear-gradient(135deg, var(--neon-blue), var(--neon-pink))',
+                          }}
+                        >
+                          {mode.icon}
+                        </motion.div>
+                        <div className="flex-1">
+                          <p
+                            className="text-sm font-medium mb-1"
+                            style={{ color: 'var(--text-primary)' }}
+                          >
+                            {mode.label}
+                          </p>
+                          <p
+                            className="text-xs"
+                            style={{ color: 'var(--text-secondary)' }}
+                          >
+                            {mode.description}
+                          </p>
+                        </div>
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="var(--text-secondary)"
+                          strokeWidth="2"
+                          className="mt-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <path d="M9 18l6-6-6-6" />
+                        </svg>
+                      </div>
+                    </motion.button>
+                  ))}
+                </motion.div>
+              )}
+
+              {/* Back Button when in a mode */}
+              {activeMode !== null && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="mb-4"
+                >
+                  <motion.button
+                    onClick={() => setActiveMode(null)}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm"
+                    style={{
+                      backgroundColor: 'var(--bg-primary)',
+                      color: 'var(--text-secondary)',
+                    }}
+                    whileHover={{
+                      color: 'var(--neon-blue)',
+                    }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M15 18l-6-6 6-6" />
+                    </svg>
+                    Back to options
+                  </motion.button>
+                </motion.div>
+              )}
+
+              {activeMode === 'examples' && (
                 <motion.div
                   key="examples"
                   initial={{ opacity: 0, y: 10 }}
@@ -621,7 +696,7 @@ export default function SceneCreator() {
                 </motion.div>
               )}
 
-              {activeTab === 'upload' && (
+              {activeMode === 'upload' && (
                 <motion.div
                   key="upload"
                   initial={{ opacity: 0, y: 10 }}
@@ -719,7 +794,7 @@ export default function SceneCreator() {
                 </motion.div>
               )}
 
-              {activeTab === 'generate' && (
+              {activeMode === 'generate' && (
                 <motion.div
                   key="generate"
                   initial={{ opacity: 0, y: 10 }}
@@ -921,7 +996,7 @@ export default function SceneCreator() {
                 </motion.div>
               )}
 
-              {activeTab === 'assemble' && (
+              {activeMode === 'assemble' && (
                 <motion.div
                   key="assemble"
                   initial={{ opacity: 0, y: 10 }}
@@ -1338,9 +1413,9 @@ export default function SceneCreator() {
                 </motion.div>
               )}
 
-              {activeTab === 'cubemap' && (
+              {activeMode === 'panorama-to-cubemap' && (
                 <motion.div
-                  key="cubemap"
+                  key="panorama-to-cubemap"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
@@ -1348,17 +1423,17 @@ export default function SceneCreator() {
                 >
                   {/* Hidden file inputs */}
                   <input
-                    ref={cubeFaceInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleCubeFaceUpload}
-                    className="hidden"
-                  />
-                  <input
                     ref={cubemapPanoramaInputRef}
                     type="file"
                     accept="image/*"
                     onChange={handleCubemapPanoramaUpload}
+                    className="hidden"
+                  />
+                  <input
+                    ref={cubeFaceInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleCubeFaceUpload}
                     className="hidden"
                   />
 
@@ -1371,112 +1446,125 @@ export default function SceneCreator() {
                     }}
                   >
                     <div className="flex items-start gap-2">
-                      <span className="text-lg">🎲</span>
+                      <span className="text-lg">🔄</span>
                       <div style={{ color: 'var(--text-secondary)' }}>
                         <p className="font-medium mb-1" style={{ color: 'var(--text-primary)' }}>
-                          Cube Map Panorama
+                          Panorama to Cubemap
                         </p>
                         <p>
-                          Upload 6 images for each face of a skybox cube, or convert an equirectangular
-                          panorama to cube faces automatically.
+                          Upload an equirectangular panorama image and convert it to 6 cube face images automatically.
                         </p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Two options: Upload faces or Convert panorama */}
-                  <div className="grid grid-cols-2 gap-3">
-                    {/* Option 1: Convert panorama */}
-                    <div
-                      className="p-3 rounded-lg"
+                  {/* Upload Panorama */}
+                  {!cubemapPanorama && Object.keys(cubeFaceImages).length === 0 && (
+                    <motion.button
+                      onClick={() => cubemapPanoramaInputRef.current?.click()}
+                      className="w-full py-12 rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-3"
                       style={{
+                        borderColor: 'var(--border-dark)',
                         backgroundColor: 'var(--bg-primary)',
-                        border: '1px solid var(--border-dark)',
+                      }}
+                      whileHover={{
+                        borderColor: 'var(--neon-blue)',
+                        boxShadow: '0 0 20px rgba(0, 240, 255, 0.1)',
                       }}
                     >
-                      <p className="text-xs font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
-                        Option 1: Convert Panorama
-                      </p>
-                      {!cubemapPanorama ? (
-                        <motion.button
-                          onClick={() => cubemapPanoramaInputRef.current?.click()}
-                          className="w-full py-6 rounded-lg border-2 border-dashed flex flex-col items-center justify-center gap-2"
-                          style={{
-                            borderColor: 'var(--border-dark)',
-                          }}
-                          whileHover={{
-                            borderColor: 'var(--neon-blue)',
-                          }}
+                      <motion.div
+                        className="w-16 h-16 rounded-full flex items-center justify-center"
+                        style={{
+                          backgroundColor: 'var(--bg-tertiary)',
+                        }}
+                        animate={{
+                          scale: [1, 1.05, 1],
+                        }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                      >
+                        <svg
+                          width="28"
+                          height="28"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="var(--neon-blue)"
+                          strokeWidth="2"
                         >
-                          <svg
-                            width="24"
-                            height="24"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="var(--neon-blue)"
-                            strokeWidth="2"
-                          >
-                            <rect x="3" y="3" width="18" height="18" rx="2" />
-                            <circle cx="8.5" cy="8.5" r="1.5" />
-                            <path d="M21 15l-5-5L5 21" />
-                          </svg>
-                          <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                            Upload panorama
-                          </span>
-                        </motion.button>
-                      ) : (
-                        <div className="space-y-2">
-                          <div className="relative rounded-lg overflow-hidden">
-                            <img
-                              src={cubemapPanorama}
-                              alt="Panorama to convert"
-                              className="w-full h-20 object-cover"
-                            />
-                            <motion.button
-                              onClick={() => setCubemapPanorama(null)}
-                              className="absolute top-1 right-1 p-1 rounded"
-                              style={{ backgroundColor: 'var(--neon-pink)' }}
-                              whileHover={{ scale: 1.1 }}
-                              whileTap={{ scale: 0.9 }}
-                            >
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
-                                <path d="M18 6L6 18M6 6l12 12" />
-                              </svg>
-                            </motion.button>
-                          </div>
-                          <motion.button
-                            onClick={handleConvertPanoramaToCubemap}
-                            disabled={isConvertingToCubemap}
-                            className="w-full py-2 rounded-lg text-xs font-medium disabled:opacity-50"
-                            style={{
-                              background: 'linear-gradient(135deg, var(--neon-blue), var(--neon-pink))',
-                              color: 'var(--bg-primary)',
-                            }}
-                            whileHover={!isConvertingToCubemap ? { scale: 1.02 } : {}}
-                            whileTap={!isConvertingToCubemap ? { scale: 0.98 } : {}}
-                          >
-                            {isConvertingToCubemap ? cubemapConversionProgress || 'Converting...' : 'Convert to Cubemap'}
-                          </motion.button>
-                        </div>
-                      )}
-                    </div>
+                          <rect x="3" y="3" width="18" height="18" rx="2" />
+                          <circle cx="8.5" cy="8.5" r="1.5" />
+                          <path d="M21 15l-5-5L5 21" />
+                        </svg>
+                      </motion.div>
+                      <div className="text-center">
+                        <p
+                          className="text-sm font-medium"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          Click to upload panorama
+                        </p>
+                        <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+                          Upload an equirectangular 360° image
+                        </p>
+                      </div>
+                    </motion.button>
+                  )}
 
-                    {/* Option 2: Upload individual faces */}
-                    <div
-                      className="p-3 rounded-lg"
-                      style={{
-                        backgroundColor: 'var(--bg-primary)',
-                        border: '1px solid var(--border-dark)',
-                      }}
-                    >
-                      <p className="text-xs font-medium mb-2" style={{ color: 'var(--text-primary)' }}>
-                        Option 2: Upload Faces
-                      </p>
-                      <p className="text-xs mb-2" style={{ color: 'var(--text-secondary)' }}>
-                        Click each face below to upload
-                      </p>
+                  {/* Panorama Preview & Convert Button */}
+                  {cubemapPanorama && Object.keys(cubeFaceImages).length === 0 && (
+                    <div className="space-y-3">
+                      <div className="relative rounded-lg overflow-hidden">
+                        <img
+                          src={cubemapPanorama}
+                          alt="Panorama to convert"
+                          className="w-full h-40 object-cover"
+                        />
+                        <motion.button
+                          onClick={() => setCubemapPanorama(null)}
+                          className="absolute top-2 right-2 p-2 rounded-lg"
+                          style={{
+                            backgroundColor: 'rgba(255, 0, 128, 0.8)',
+                          }}
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+                            <path d="M18 6L6 18M6 6l12 12" />
+                          </svg>
+                        </motion.button>
+                      </div>
+                      <motion.button
+                        onClick={handleConvertPanoramaToCubemap}
+                        disabled={isConvertingToCubemap}
+                        className="w-full py-3 rounded-lg font-medium text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                        style={{
+                          background: 'linear-gradient(135deg, var(--neon-blue), var(--neon-pink))',
+                          color: 'var(--bg-primary)',
+                        }}
+                        whileHover={!isConvertingToCubemap ? { scale: 1.02 } : {}}
+                        whileTap={!isConvertingToCubemap ? { scale: 0.98 } : {}}
+                      >
+                        {isConvertingToCubemap ? (
+                          <>
+                            <motion.div
+                              className="w-4 h-4 border-2 rounded-full"
+                              style={{
+                                borderColor: 'transparent',
+                                borderTopColor: 'var(--bg-primary)',
+                              }}
+                              animate={{ rotate: 360 }}
+                              transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                            />
+                            {cubemapConversionProgress || 'Converting...'}
+                          </>
+                        ) : (
+                          <>
+                            <span>🔄</span>
+                            Convert to Cubemap
+                          </>
+                        )}
+                      </motion.button>
                     </div>
-                  </div>
+                  )}
 
                   {/* Error Message */}
                   {cubemapError && (
@@ -1500,6 +1588,153 @@ export default function SceneCreator() {
                       </div>
                     </motion.div>
                   )}
+
+                  {/* Converted Cube Faces Preview */}
+                  {Object.keys(cubeFaceImages).length > 0 && (
+                    <>
+                      <div className="grid grid-cols-3 gap-2">
+                        {CUBE_FACES.map((face) => {
+                          const hasImage = !!cubeFaceImages[face.id];
+                          return (
+                            <motion.div
+                              key={face.id}
+                              className="relative aspect-square rounded-lg overflow-hidden"
+                              style={{
+                                backgroundColor: 'var(--bg-primary)',
+                                border: hasImage
+                                  ? '2px solid var(--neon-blue)'
+                                  : '2px dashed var(--border-dark)',
+                              }}
+                              initial={{ opacity: 0, scale: 0.9 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              transition={{ delay: CUBE_FACES.indexOf(face) * 0.05 }}
+                            >
+                              {hasImage ? (
+                                <>
+                                  <img
+                                    src={cubeFaceImages[face.id]}
+                                    alt={face.label}
+                                    className="w-full h-full object-cover"
+                                  />
+                                  <div
+                                    className="absolute bottom-0 left-0 right-0 px-2 py-1 text-center"
+                                    style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)' }}
+                                  >
+                                    <span className="text-xs font-medium" style={{ color: 'var(--neon-blue)' }}>
+                                      {face.icon} {face.label.split(' ')[0]}
+                                    </span>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className="w-full h-full flex flex-col items-center justify-center gap-1">
+                                  <span className="text-2xl">{face.icon}</span>
+                                  <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>
+                                    {face.label.split(' ')[0]}
+                                  </span>
+                                </div>
+                              )}
+                            </motion.div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Progress */}
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                          {uploadedFacesCount}/6 faces converted
+                        </p>
+                        <motion.button
+                          onClick={() => {
+                            setCubeFaceImages({});
+                            setCubemapPanorama(null);
+                          }}
+                          className="text-xs px-2 py-1 rounded"
+                          style={{ color: 'var(--neon-pink)' }}
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                        >
+                          Start over
+                        </motion.button>
+                      </div>
+
+                      {/* Progress Bar */}
+                      <div
+                        className="h-2 rounded-full overflow-hidden"
+                        style={{ backgroundColor: 'var(--bg-tertiary)' }}
+                      >
+                        <motion.div
+                          className="h-full rounded-full"
+                          style={{
+                            background: allCubeFacesUploaded
+                              ? 'linear-gradient(135deg, var(--neon-blue), var(--neon-pink))'
+                              : 'var(--neon-blue)',
+                          }}
+                          initial={{ width: 0 }}
+                          animate={{ width: `${(uploadedFacesCount / 6) * 100}%` }}
+                          transition={{ duration: 0.3 }}
+                        />
+                      </div>
+
+                      {/* Success Message */}
+                      {allCubeFacesUploaded && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="p-3 rounded-lg text-sm flex items-center gap-2"
+                          style={{
+                            backgroundColor: 'rgba(0, 240, 255, 0.1)',
+                            border: '1px solid var(--neon-blue)',
+                            color: 'var(--neon-blue)',
+                          }}
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                          Conversion complete! Click &quot;Create Scene&quot; to add the cube panorama.
+                        </motion.div>
+                      )}
+                    </>
+                  )}
+                </motion.div>
+              )}
+
+              {activeMode === 'create-cubemap' && (
+                <motion.div
+                  key="create-cubemap"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="space-y-4"
+                >
+                  {/* Hidden file input */}
+                  <input
+                    ref={cubeFaceInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleCubeFaceUpload}
+                    className="hidden"
+                  />
+
+                  {/* Instructions */}
+                  <div
+                    className="p-3 rounded-lg text-xs"
+                    style={{
+                      backgroundColor: 'var(--bg-tertiary)',
+                      border: '1px solid var(--border-dark)',
+                    }}
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="text-lg">🎲</span>
+                      <div style={{ color: 'var(--text-secondary)' }}>
+                        <p className="font-medium mb-1" style={{ color: 'var(--text-primary)' }}>
+                          Create Cubemap
+                        </p>
+                        <p>
+                          Upload 6 individual images, one for each face of a skybox cube. Click on each face below to upload.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
 
                   {/* Cube Face Grid */}
                   <div className="grid grid-cols-3 gap-2">
@@ -1557,7 +1792,7 @@ export default function SceneCreator() {
                                 {face.label.split(' ')[0]}
                               </span>
                               <span className="text-xs" style={{ color: 'var(--text-secondary)', opacity: 0.6 }}>
-                                {face.label.split(' ')[1]}
+                                Click to upload
                               </span>
                             </motion.button>
                           )}
@@ -1575,7 +1810,6 @@ export default function SceneCreator() {
                       <motion.button
                         onClick={() => {
                           setCubeFaceImages({});
-                          setCubemapPanorama(null);
                         }}
                         className="text-xs px-2 py-1 rounded"
                         style={{ color: 'var(--neon-pink)' }}
