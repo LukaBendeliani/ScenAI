@@ -19,7 +19,7 @@ import '@xyflow/react/dist/style.css';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSceneContext } from '@/context/SceneContext';
 import SceneNode from './SceneNode';
-import AmbientBackground from './AmbientBackground';
+// import AmbientBackground from './AmbientBackground';
 import { SceneNode as SceneNodeType } from '@/types';
 
 const nodeTypes = {
@@ -93,7 +93,7 @@ export default function SceneEditor() {
       style={{ backgroundColor: 'var(--bg-primary)' }}
     >
       {/* Ambient 3D Background */}
-      <AmbientBackground />
+      {/* <AmbientBackground /> */}
 
       {/* React Flow Canvas */}
       <ReactFlow

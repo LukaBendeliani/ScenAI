@@ -9,21 +9,13 @@ interface RouteParams {
 // GET /api/tours/[id] - Get a specific tour with its editor state
 export async function GET(request: Request, { params }: RouteParams) {
   try {
-    const session = await auth();
-    
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
+    // const session = await auth(); // Allow public access
 
     const { id } = await params;
 
-    const tour = await prisma.tour.findFirst({
+    const tour = await prisma.tour.findUnique({
       where: {
         id,
-        userId: session.user.id,
       },
     });
 
@@ -59,7 +51,7 @@ export async function GET(request: Request, { params }: RouteParams) {
 export async function PUT(request: Request, { params }: RouteParams) {
   try {
     const session = await auth();
-    
+
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -144,7 +136,7 @@ export async function PUT(request: Request, { params }: RouteParams) {
 export async function DELETE(request: Request, { params }: RouteParams) {
   try {
     const session = await auth();
-    
+
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },

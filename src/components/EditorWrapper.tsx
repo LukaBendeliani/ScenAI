@@ -12,17 +12,18 @@ import TourSelector from './TourSelector';
 import SaveIndicator from './SaveIndicator';
 
 // Inner component that connects Tour and Scene contexts
-function EditorContent() {
-  const { 
-    currentTourId, 
-    selectTour, 
-    saveCurrentTour, 
+function EditorContent({ tourId }: { tourId?: string }) {
+  const {
+    currentTourId,
+    selectTour,
+    saveCurrentTour,
     markUnsavedChanges,
     hasUnsavedChanges,
     isTourSelectorOpen,
     setIsTourSelectorOpen,
+    isLoading,
   } = useTourContext();
-  
+
   const { loadState, getState, clearState } = useSceneContext();
   const isLoadingTourRef = useRef(false);
 
@@ -33,20 +34,25 @@ function EditorContent() {
     }
   }, [markUnsavedChanges]);
 
-  // Load tour when selected
+  // Select tour from URL prop
   useEffect(() => {
-    if (currentTourId && !isLoadingTourRef.current) {
+    if (tourId && tourId !== currentTourId && !isLoadingTourRef.current) {
       isLoadingTourRef.current = true;
-      selectTour(currentTourId).then((state) => {
+      selectTour(tourId).then((state) => {
         if (state) {
           loadState(state.scenes || [], state.nodes || [], state.edges || []);
+        } else {
+          // Handle error or redirect if tour not found? 
+          // For now just clear state
+          clearState();
         }
         isLoadingTourRef.current = false;
       });
-    } else if (!currentTourId) {
+    } else if (!tourId && !currentTourId) {
+      // Only clear if neither exists (though this case shouldn't happen with [tourId] route)
       clearState();
     }
-  }, [currentTourId, selectTour, loadState, clearState]);
+  }, [tourId, currentTourId, selectTour, loadState, clearState]);
 
   // Manual save function
   const handleSave = useCallback(async () => {
@@ -69,8 +75,28 @@ function EditorContent() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentTourId, hasUnsavedChanges, handleSave]);
 
-  // Show tour selector if no tour is selected or if explicitly opened
-  if (!currentTourId || isTourSelectorOpen) {
+  // Show loading state while fetching tour
+  if (isLoading || (tourId && tourId !== currentTourId)) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center" style={{ backgroundColor: 'var(--bg-primary, #0A0A0E)' }}>
+        <div className="text-center">
+          <div
+            className="w-16 h-16 mx-auto mb-4 rounded-full animate-spin"
+            style={{
+              border: '3px solid var(--border-dark, #303540)',
+              borderTopColor: 'var(--neon-blue, #00F0FF)',
+            }}
+          />
+          <p style={{ color: 'var(--text-secondary, #A0A0B0)', fontSize: '14px' }}>
+            Loading Tour...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show tour selector if explicitly opened
+  if (isTourSelectorOpen) {
     return <TourSelector onClose={() => setIsTourSelectorOpen(false)} />;
   }
 
@@ -83,7 +109,7 @@ function EditorContent() {
         {/* Main Editor */}
         <main className="flex-1 relative overflow-hidden">
           <SceneEditor />
-          
+
           {/* Save Indicator */}
           <SaveIndicator onSave={handleSave} />
         </main>
@@ -97,19 +123,19 @@ function EditorContent() {
 }
 
 // Wrapper that provides state change callback to SceneProvider
-function EditorWithSceneProvider() {
+function EditorWithSceneProvider({ tourId }: { tourId?: string }) {
   const { markUnsavedChanges } = useTourContext();
 
   return (
     <SceneProvider onStateChange={markUnsavedChanges}>
       <ReactFlowProvider>
-        <EditorContent />
+        <EditorContent tourId={tourId} />
       </ReactFlowProvider>
     </SceneProvider>
   );
 }
 
-export default function EditorWrapper() {
+export default function EditorWrapper({ tourId }: { tourId?: string }) {
   // Add body class to prevent scrolling in editor
   useEffect(() => {
     document.body.classList.add('editor-page');
@@ -120,7 +146,7 @@ export default function EditorWrapper() {
 
   return (
     <TourProvider>
-      <EditorWithSceneProvider />
+      <EditorWithSceneProvider tourId={tourId} />
     </TourProvider>
   );
 }

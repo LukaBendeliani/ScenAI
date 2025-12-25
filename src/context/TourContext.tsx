@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { Scene, SceneNode, SceneEdge } from '@/types';
+import { useSession } from 'next-auth/react';
 
 export interface Tour {
   id: string;
@@ -52,7 +53,9 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isTourSelectorOpen, setIsTourSelectorOpen] = useState(false);
-  
+
+  const session = useSession();
+
   // Ref to store the current editor state for auto-save
   const editorStateRef = useRef<EditorState | null>(null);
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -62,14 +65,14 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
     try {
       setIsLoading(true);
       setError(null);
-      
+
       const response = await fetch('/api/tours');
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.error || 'Failed to fetch tours');
       }
-      
+
       setTours(data.tours);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch tours';
@@ -85,19 +88,19 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
     try {
       setIsLoading(true);
       setError(null);
-      
+
       const response = await fetch('/api/tours', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, description }),
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.error || 'Failed to create tour');
       }
-      
+
       setTours((prev) => [data.tour, ...prev]);
       return data.tour.id;
     } catch (err) {
@@ -119,26 +122,26 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
       setHasUnsavedChanges(false);
       return null;
     }
-    
+
     try {
       setIsLoading(true);
       setError(null);
-      
+
       const response = await fetch(`/api/tours/${tourId}`);
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.error || 'Failed to load tour');
       }
-      
+
       setCurrentTourId(tourId);
       setCurrentTour(data.tour);
       setHasUnsavedChanges(false);
       setLastSaved(new Date(data.tour.updatedAt));
-      
+
       const editorState = data.tour.editorState as EditorState;
       editorStateRef.current = editorState;
-      
+
       return editorState;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load tour';
@@ -155,24 +158,24 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
     try {
       setIsLoading(true);
       setError(null);
-      
+
       const response = await fetch(`/api/tours/${tourId}`, {
         method: 'DELETE',
       });
-      
+
       if (!response.ok) {
         const data = await response.json();
         throw new Error(data.error || 'Failed to delete tour');
       }
-      
+
       setTours((prev) => prev.filter((t) => t.id !== tourId));
-      
+
       if (currentTourId === tourId) {
         setCurrentTourId(null);
         setCurrentTour(null);
         editorStateRef.current = null;
       }
-      
+
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to delete tour';
@@ -188,27 +191,27 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
   const renameTour = useCallback(async (tourId: string, name: string): Promise<boolean> => {
     try {
       setError(null);
-      
+
       const response = await fetch(`/api/tours/${tourId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.error || 'Failed to rename tour');
       }
-      
+
       setTours((prev) =>
         prev.map((t) => (t.id === tourId ? { ...t, name: data.tour.name } : t))
       );
-      
+
       if (currentTourId === tourId && currentTour) {
         setCurrentTour({ ...currentTour, name: data.tour.name });
       }
-      
+
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to rename tour';
@@ -221,14 +224,14 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
   // Save the current tour state
   const saveCurrentTour = useCallback(async (state: EditorState): Promise<boolean> => {
     if (!currentTourId) return false;
-    
+
     try {
       setIsSaving(true);
       setError(null);
-      
+
       // Update the thumbnail from the first scene if available
       const thumbnail = state.scenes[0]?.thumbnail || null;
-      
+
       const response = await fetch(`/api/tours/${currentTourId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -237,17 +240,17 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
           thumbnail,
         }),
       });
-      
+
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw new Error(data.error || 'Failed to save tour');
       }
-      
+
       editorStateRef.current = state;
       setHasUnsavedChanges(false);
       setLastSaved(new Date());
-      
+
       // Update tour in list
       setTours((prev) =>
         prev.map((t) =>
@@ -256,7 +259,7 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
             : t
         )
       );
-      
+
       return true;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to save tour';
@@ -280,7 +283,7 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current);
       }
-      
+
       // Set new timer for auto-save
       autoSaveTimerRef.current = setTimeout(() => {
         if (editorStateRef.current) {
@@ -288,7 +291,7 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
         }
       }, AUTO_SAVE_INTERVAL);
     }
-    
+
     return () => {
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current);
@@ -298,7 +301,9 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
 
   // Fetch tours on mount
   useEffect(() => {
-    fetchTours();
+    if (session.data?.user) {
+      fetchTours();
+    }
   }, [fetchTours]);
 
   return (

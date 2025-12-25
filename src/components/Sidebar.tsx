@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useSession, signOut } from 'next-auth/react';
 import { useSceneContext } from '@/context/SceneContext';
 import { useTourContext } from '@/context/TourContext';
+import { useRouter } from 'next/navigation';
 
 const sidebarVariants = {
   open: {
@@ -54,6 +55,7 @@ export default function Sidebar() {
     openCreator,
     toggleSidebar,
   } = useSceneContext();
+  const router = useRouter();
 
   return (
     <>
@@ -134,6 +136,7 @@ export default function Sidebar() {
                       ],
                     }}
                     transition={{ duration: 2, repeat: Infinity }}
+                    onClick={() => router.push('/dashboard')}
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="white">
                       <circle cx="12" cy="12" r="10" fill="none" stroke="white" strokeWidth="2" />
@@ -145,10 +148,10 @@ export default function Sidebar() {
                       className="text-sm font-semibold tracking-tight"
                       style={{ color: 'var(--text-primary)' }}
                     >
-                      360 Editor
+                      SceneAI
                     </h1>
                     <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                      Scene Navigator
+                      Scene Editor
                     </p>
                   </div>
                 </div>
@@ -213,7 +216,7 @@ export default function Sidebar() {
                                 'linear-gradient(to top, rgba(10, 10, 14, 0.9), transparent)',
                             }}
                           />
-                          
+
                           {/* Action Buttons */}
                           <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             <motion.button

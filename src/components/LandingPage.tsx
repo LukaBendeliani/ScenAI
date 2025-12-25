@@ -241,11 +241,7 @@ export default function LandingPage() {
   const [scrollY, setScrollY] = useState(0);
 
   // Redirect to editor if authenticated
-  useEffect(() => {
-    if (status === 'authenticated' && session) {
-      router.push('/editor');
-    }
-  }, [status, session, router]);
+
 
   useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);
@@ -329,37 +325,57 @@ export default function LandingPage() {
 
           {/* Auth Buttons */}
           <div className="flex items-center gap-3">
-            <motion.button
-              onClick={() => openAuth('signin')}
-              className="px-5 py-2.5 rounded-lg text-sm font-medium"
-              style={{
-                color: 'var(--text-primary)',
-                backgroundColor: 'transparent',
-                border: '1px solid var(--border-dark)',
-              }}
-              whileHover={{
-                borderColor: 'var(--neon-blue)',
-                boxShadow: '0 0 15px rgba(0, 240, 255, 0.2)',
-              }}
-              whileTap={{ scale: 0.98 }}
-            >
-              Sign In
-            </motion.button>
-            <motion.button
-              onClick={() => openAuth('signup')}
-              className="px-5 py-2.5 rounded-lg text-sm font-medium"
-              style={{
-                background: 'linear-gradient(135deg, var(--neon-blue), var(--neon-pink))',
-                color: 'var(--bg-primary)',
-              }}
-              whileHover={{
-                boxShadow: '0 0 25px rgba(0, 240, 255, 0.5)',
-                scale: 1.02,
-              }}
-              whileTap={{ scale: 0.98 }}
-            >
-              Get Started
-            </motion.button>
+            {status === 'authenticated' ? (
+              <motion.button
+                onClick={() => router.push('/dashboard')}
+                className="px-5 py-2.5 rounded-lg text-sm font-medium"
+                style={{
+                  background: 'linear-gradient(135deg, var(--neon-blue), var(--neon-pink))',
+                  color: 'var(--bg-primary)',
+                }}
+                whileHover={{
+                  boxShadow: '0 0 25px rgba(0, 240, 255, 0.5)',
+                  scale: 1.02,
+                }}
+                whileTap={{ scale: 0.98 }}
+              >
+                Go to Dashboard
+              </motion.button>
+            ) : (
+              <>
+                <motion.button
+                  onClick={() => openAuth('signin')}
+                  className="px-5 py-2.5 rounded-lg text-sm font-medium"
+                  style={{
+                    color: 'var(--text-primary)',
+                    backgroundColor: 'transparent',
+                    border: '1px solid var(--border-dark)',
+                  }}
+                  whileHover={{
+                    borderColor: 'var(--neon-blue)',
+                    boxShadow: '0 0 15px rgba(0, 240, 255, 0.2)',
+                  }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Sign In
+                </motion.button>
+                <motion.button
+                  onClick={() => openAuth('signup')}
+                  className="px-5 py-2.5 rounded-lg text-sm font-medium"
+                  style={{
+                    background: 'linear-gradient(135deg, var(--neon-blue), var(--neon-pink))',
+                    color: 'var(--bg-primary)',
+                  }}
+                  whileHover={{
+                    boxShadow: '0 0 25px rgba(0, 240, 255, 0.5)',
+                    scale: 1.02,
+                  }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  Get Started
+                </motion.button>
+              </>
+            )}
           </div>
         </div>
       </motion.nav>
@@ -388,7 +404,7 @@ export default function LandingPage() {
               }}
               transition={{ duration: 2, repeat: Infinity }}
             >
-              <span className="w-2 h-2 rounded-full bg-[var(--neon-blue)] animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-neon-blue animate-pulse" />
               <span className="text-xs font-medium" style={{ color: 'var(--neon-blue)' }}>
                 AI-Powered Virtual Tours
               </span>
@@ -413,7 +429,7 @@ export default function LandingPage() {
 
             <div className="flex flex-wrap gap-4">
               <motion.button
-                onClick={() => openAuth('signup')}
+                onClick={() => status === 'authenticated' ? router.push('/dashboard') : openAuth('signup')}
                 className="px-8 py-4 rounded-xl text-base font-semibold flex items-center gap-2"
                 style={{
                   background: 'linear-gradient(135deg, var(--neon-blue), var(--neon-pink))',
@@ -425,7 +441,7 @@ export default function LandingPage() {
                 }}
                 whileTap={{ scale: 0.98 }}
               >
-                Start Creating
+                {status === 'authenticated' ? 'Go to Dashboard' : 'Start Creating'}
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M5 12h14M12 5l7 7-7 7" />
                 </svg>
@@ -621,7 +637,7 @@ export default function LandingPage() {
               background: 'radial-gradient(ellipse at center, rgba(0, 240, 255, 0.2), transparent 70%)',
             }}
           />
-          
+
           <div className="relative z-10">
             <motion.div
               className="w-20 h-20 mx-auto mb-6 rounded-2xl flex items-center justify-center"

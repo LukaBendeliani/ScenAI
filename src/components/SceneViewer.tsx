@@ -84,7 +84,7 @@ function HotspotMarker({ position, label, onClick, onDelete, targetSceneName, is
         />
       </mesh>
       <pointLight color={isPreview ? '#00FF00' : '#00F0FF'} intensity={isPreview ? 2 : 1} distance={3} />
-      
+
       {isPreview && (
         <Html center distanceFactor={10}>
           <div
@@ -101,7 +101,7 @@ function HotspotMarker({ position, label, onClick, onDelete, targetSceneName, is
           </div>
         </Html>
       )}
-      
+
       {!isPreview && showTooltip && (
         <Html center distanceFactor={10}>
           <div
@@ -192,7 +192,7 @@ function PanoramaSphere({ imageUrl, isPlacementMode, onPlaceHotspot }: PanoramaS
   const handleClick = useCallback((e: ThreeEvent<MouseEvent>) => {
     if (!isPlacementMode) return;
     e.stopPropagation();
-    
+
     if (e.point) {
       const normalized = e.point.clone().normalize().multiplyScalar(9.5);
       onPlaceHotspot({ x: normalized.x, y: normalized.y, z: normalized.z });
@@ -200,9 +200,9 @@ function PanoramaSphere({ imageUrl, isPlacementMode, onPlaceHotspot }: PanoramaS
   }, [isPlacementMode, onPlaceHotspot]);
 
   return (
-    <mesh 
-      ref={meshRef} 
-      scale={[-1, 1, 1]} 
+    <mesh
+      ref={meshRef}
+      scale={[-1, 1, 1]}
       onClick={handleClick}
     >
       <sphereGeometry args={[10, 64, 64]} />
@@ -213,18 +213,19 @@ function PanoramaSphere({ imageUrl, isPlacementMode, onPlaceHotspot }: PanoramaS
 
 function CameraController() {
   const { camera } = useThree();
-  
+
   useEffect(() => {
     camera.position.set(0, 0, 0.1);
   }, [camera]);
 
   return (
     <OrbitControls
-      enableZoom={false}
-      enablePan={false}
+      enableZoom={true}
+      enablePan={true}
       rotateSpeed={-0.3}
       minPolarAngle={Math.PI * 0.1}
       maxPolarAngle={Math.PI * 0.9}
+
     />
   );
 }
@@ -297,7 +298,7 @@ export default function SceneViewer() {
   // Confirm and create hotspot
   const confirmHotspot = useCallback(() => {
     if (!viewingSceneId || !pendingHotspotPosition || !selectedTargetId) return;
-    
+
     addHotspot(viewingSceneId, {
       position: pendingHotspotPosition,
       targetSceneId: selectedTargetId,
@@ -440,8 +441,8 @@ export default function SceneViewer() {
 
         {/* 3D Canvas */}
         <Suspense fallback={<LoadingScreen />}>
-          <Canvas 
-            camera={{ fov: 75, position: [0, 0, 0.1] }}
+          <Canvas
+            camera={{ fov: 85, position: [0, 0, 0.1] }}
             style={{ cursor: isPlacementMode ? 'crosshair' : 'grab' }}
           >
             <CameraController />
@@ -453,24 +454,24 @@ export default function SceneViewer() {
                 onPlaceHotspot={handlePlaceHotspot}
               />
             ) : (
-              <PanoramaSphere 
-                imageUrl={currentScene.imageUrl} 
+              <PanoramaSphere
+                imageUrl={currentScene.imageUrl}
                 isPlacementMode={isPlacementMode}
                 onPlaceHotspot={handlePlaceHotspot}
               />
             )}
-            
+
             {/* Preview hotspot during placement */}
             {pendingHotspotPosition && (
               <HotspotMarker
                 position={[pendingHotspotPosition.x, pendingHotspotPosition.y, pendingHotspotPosition.z]}
                 label="New Hotspot"
-                onClick={() => {}}
-                onDelete={() => {}}
+                onClick={() => { }}
+                onDelete={() => { }}
                 isPreview
               />
             )}
-            
+
             {/* Render existing Hotspots */}
             {currentScene.hotspots.map((hotspot) => {
               const targetScene = scenes.find((s) => s.id === hotspot.targetSceneId);
@@ -485,7 +486,7 @@ export default function SceneViewer() {
                 />
               );
             })}
-            
+
             <ambientLight intensity={0.5} />
           </Canvas>
         </Suspense>
@@ -704,8 +705,8 @@ export default function SceneViewer() {
                   color: '#00FF00',
                 }}
                 initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ 
-                  opacity: 1, 
+                animate={{
+                  opacity: 1,
                   scale: 1,
                   boxShadow: [
                     '0 0 10px rgba(0, 255, 0, 0.3)',
@@ -713,7 +714,7 @@ export default function SceneViewer() {
                     '0 0 10px rgba(0, 255, 0, 0.3)',
                   ]
                 }}
-                transition={{ 
+                transition={{
                   boxShadow: { duration: 1.5, repeat: Infinity }
                 }}
               >

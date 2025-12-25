@@ -29,7 +29,7 @@ export default function TourSelector({ onClose }: TourSelectorProps) {
 
   const handleCreateTour = async () => {
     if (!newTourName.trim()) return;
-    
+
     const tourId = await createTour(newTourName, newTourDescription);
     if (tourId) {
       await selectTour(tourId);

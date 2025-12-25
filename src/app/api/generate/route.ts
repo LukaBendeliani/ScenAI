@@ -14,7 +14,7 @@ const generationConfig = {
   responseModalities: ["TEXT", "IMAGE"],
   imageConfig: {
     aspectRatio: "16:9",
-    imageSize: "1K",
+    imageSize: "4K",
     // outputMimeType: "image/png",
   },
   safetySettings: [
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
         const imageData = part.inlineData.data;
         const mimeType = part.inlineData.mimeType || 'image/png';
         const dataUrl = `data:${mimeType};base64,${imageData}`;
-        
+
         return NextResponse.json({
           success: true,
           imageUrl: dataUrl,
